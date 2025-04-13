@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zombie Survival V2</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #222; /* Dark background */
+            color: white;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        #game-container {
+            position: relative;
+            width: 800px; /* Adjust as needed */
+            height: 600px; /* Adjust as needed */
+            background-color: #4a4a4a; /* Grungy ground color */
+            border: 2px solid #111;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><path d="M12 12 L88 88 M88 12 L12 88" stroke="%23555" stroke-width="1" /></svg>'); /* Subtle crack pattern */
+        }
+        canvas {
+            display: block;
+        }
+        .ui-element {
+            position: absolute;
+            padding: 5px 10px;
+            background-color: rgba(0, 0, 0, 0.6);
+            border: 1px solid #555;
+            border-radius: 3px;
+            z-index: 10;
+            font-size: 14px;
+            text-shadow: 1px 1px #000;
+        }
+        #health-bar-container {
+            top: 10px;
+            left: 10px;
+            width: 150px;
+            height: 20px;
+            background-color: #500;
+            border: 1px solid #800;
+            padding: 0;
+        }
+        #health-bar {
+            width: 100%;
+            height: 100%;
+            background-color: #0f0;
+            transition: width 0.2s linear;
+        }
+        #health-text {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            line-height: 20px;
+            font-size: 12px;
+            color: white;
+            text-shadow: 1px 1px #000;
+        }
+         #ammo-count {
+            top: 40px;
+            left: 10px;
+         }
+        #score {
+            top: 10px;
+            right: 10px;
+        }
+        #weapon-display {
+             top: 40px;
+             right: 10px;
+        }
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 100;
+            cursor: default; /* Change cursor back */
+        }
+        #game-over-screen {
+             display: none; /* Hidden initially */
+        }
+        h1 {
+            margin-bottom: 10px;
+            color: #b00;
+            text-shadow: 2px 2px #000;
+        }
+        p {
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #555;
+            border: 1px solid #888;
+            color: white;
+            border-radius: 5px;
+            margin-top: 10px; /* Add margin for buttons */
+        }
+        button:hover {
+            background-color: #777;
+        }
+        /* Weapon Selection Styling */
+        #weapon-selection {
+            margin-top: 15px;
+            margin-bottom: 15px;
+        }
+        #weapon-selection label {
+            margin: 0 10px;
+            cursor: pointer;
+        }
+        #weapon-selection input[type="radio"] {
+             margin-right: 5px;
+        }
+        /* High Score Styling */
+        #high-score-display {
+            margin-top: 10px;
+            font-size: 16px;
+            color: #ccc;
+        }
+        /* Style for button group on game over */
+        .button-group {
+            display: flex;
+            gap: 15px; /* Space between buttons */
+        }
+
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="health-bar-container" class="ui-element">
+            <div id="health-bar"></div>
+            <div id="health-text">Health: 100</div>
+        </div>
+        <div id="ammo-count" class="ui-element">Ammo: ∞</div>
+        <div id="score" class="ui-element">Kills: 0</div>
+        <div id="weapon-display" class="ui-element">Weapon: Pistol</div>
+
+        <div id="start-screen">
+            <h1>Zombie Survival V2</h1>
+            <p>Use WASD or Arrow Keys to Move.<br>Spacebar or Mouse Click to Shoot.<br>Survive as long as you can!</p>
+
+            <div id="weapon-selection">
+                <label>
+                    <input type="radio" name="weapon" value="pistol" checked> Pistol (Infinite Ammo)
+                </label>
+                <label>
+                    <input type="radio" name="weapon" value="shotgun"> Shotgun (Limited Ammo)
+                </label>
+            </div>
+
+            <button id="start-button">Start Game</button>
+        </div>
+
+        <div id="game-over-screen">
+            <h1>GAME OVER</h1>
+            <p>You got <span id="final-score">0</span> kills.</p>
+            <p id="high-score-display">High Score: <span id="high-score">0</span></p>
+            <div class="button-group">
+                <button id="restart-button">Restart Game</button>
+                <button id="main-menu-button">Main Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // --- Basic Web Audio Setup ---
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(type) {
+            // ... (Sound function remains the same) ...
+            if (!audioContext) return;
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            let freq = 440;
+            let duration = 0.1;
+            let vol = 0.1;
+            oscillator.type = 'triangle'; // Default
+
+            switch(type) {
+                case 'shoot_pistol':
+                    freq = 660; duration = 0.08; vol = 0.08;
+                    break;
+                case 'shoot_shotgun':
+                    oscillator.type = 'noise';
+                    gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
+                    duration = 0.15;
+                    break;
+                case 'hit_zombie':
+                    oscillator.type = 'sawtooth'; freq = 150; duration = 0.15; vol = 0.1;
+                    break;
+                case 'hit_player':
+                    oscillator.type = 'square'; freq = 200; duration = 0.2; vol = 0.2;
+                    break;
+                 case 'pickup_ammo':
+                    oscillator.type = 'sine'; freq = 880; duration = 0.1; vol = 0.15;
+                    break;
+                 case 'no_ammo':
+                     oscillator.type = 'square'; freq = 100; duration = 0.05; vol = 0.05;
+                     break;
+                 case 'game_over':
+                    oscillator.type = 'sine'; freq = 100; duration = 1.0; vol = 0.3;
+                    break;
+            }
+
+            if (oscillator.type !== 'noise') {
+                 oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+                 gainNode.gain.setValueAtTime(vol, audioContext.currentTime);
+                 gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duration);
+            }
+
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+
+        // --- Game Setup ---
+        const gameContainer = document.getElementById('game-container');
+        const scene = new THREE.Scene();
+        const gameWidth = 800;
+        const gameHeight = 600;
+        const camera = new THREE.OrthographicCamera(gameWidth / -2, gameWidth / 2, gameHeight / 2, gameHeight / -2, 1, 1000);
+        camera.position.z = 500;
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(gameWidth, gameHeight);
+        gameContainer.appendChild(renderer.domElement);
+
+        // --- Weapon Definitions ---
+        const WEAPONS = {
+            pistol: { name: 'Pistol', fireRate: 250, damage: 1, ammo: Infinity, maxAmmo: Infinity, bulletSpeed: 450, bulletSize: 8, color: 0xffff00, sound: 'shoot_pistol', pellets: 1, spread: 0 },
+            shotgun: { name: 'Shotgun', fireRate: 800, damage: 1, ammo: 10, maxAmmo: 30, bulletSpeed: 350, bulletSize: 6, color: 0xffa500, sound: 'shoot_shotgun', pellets: 6, spread: 0.3 }
+        };
+
+        // Game State
+        let player, playerHealth, playerScore, playerWeapon, currentAmmo;
+        let zombies = [];
+        let bullets = [];
+        let pickups = [];
+        let keys = {};
+        let mouse = { x: 0, y: 0, down: false };
+        let lastShotTime = 0, lastZombieSpawnTime = 0, lastPickupSpawnTime = 0, lastPlayerHitTime = 0;
+        let highScore = localStorage.getItem('zombieHighScore') || 0;
+        let gameOver = true;
+        let gameRunning = false;
+        let selectedWeaponKey = 'pistol';
+
+        const playerSpeed = 200;
+        const playerSize = 30; // Define player size for collision
+        const zombieBaseSpeed = 40;
+        const playerMaxHealth = 100;
+        const zombieSpawnRate = 1800;
+        const pickupSpawnRate = 10000;
+        const playerHitCooldown = 1000;
+        const ammoPickupAmount = 8;
+
+        // --- Zombie Types ---
+        const ZOMBIE_TYPES = {
+            normal: { color: 0x00ff00, speedMultiplier: 1.0, health: 3, size: 25 },
+            fast:   { color: 0x00ffff, speedMultiplier: 1.5, health: 2, size: 22 },
+            tank:   { color: 0xff8800, speedMultiplier: 0.7, health: 6, size: 35 }
+        };
+
+        // UI Elements
+        const healthBar = document.getElementById('health-bar');
+        const healthText = document.getElementById('health-text');
+        const ammoCountEl = document.getElementById('ammo-count');
+        const scoreEl = document.getElementById('score');
+        const weaponDisplayEl = document.getElementById('weapon-display');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreEl = document.getElementById('final-score');
+        const highScoreEl = document.getElementById('high-score');
+        const highScoreDisplay = document.getElementById('high-score-display');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+        const mainMenuButton = document.getElementById('main-menu-button'); // Get main menu button
+        const weaponSelectionRadios = document.querySelectorAll('input[name="weapon"]');
+
+
+        // --- Game Objects ---
+        function createPlayer() {
+            const geometry = new THREE.PlaneGeometry(playerSize, playerSize); // Use playerSize constant
+            const material = new THREE.MeshBasicMaterial({ color: 0x0077ff, side: THREE.DoubleSide });
+            const playerMesh = new THREE.Mesh(geometry, material);
+            playerMesh.position.set(0, 0, 1);
+            scene.add(playerMesh);
+            return playerMesh;
+        }
+
+        function createZombie(x, y) {
+            const rand = Math.random();
+            let typeKey = (rand < 0.6) ? 'normal' : (rand < 0.85) ? 'fast' : 'tank';
+            const type = ZOMBIE_TYPES[typeKey];
+            const geometry = new THREE.PlaneGeometry(type.size, type.size);
+            const material = new THREE.MeshBasicMaterial({ color: type.color, side: THREE.DoubleSide });
+            const zombieMesh = new THREE.Mesh(geometry, material);
+            zombieMesh.position.set(x, y, 0);
+            scene.add(zombieMesh);
+
+            const zombieData = {
+                mesh: zombieMesh,
+                health: type.health,
+                speed: zombieBaseSpeed * type.speedMultiplier,
+                size: type.size // <-- Store size for collision detection
+            };
+            zombies.push(zombieData);
+        }
+
+        function createBullet(direction, weapon) {
+            const geometry = new THREE.PlaneGeometry(weapon.bulletSize, weapon.bulletSize);
+            const material = new THREE.MeshBasicMaterial({ color: weapon.color, side: THREE.DoubleSide });
+            const bulletMesh = new THREE.Mesh(geometry, material);
+            bulletMesh.position.copy(player.position);
+            bulletMesh.position.z = 0.5;
+            scene.add(bulletMesh);
+
+            bullets.push({
+                mesh: bulletMesh,
+                velocity: direction.clone(),
+                damage: weapon.damage,
+                speed: weapon.bulletSpeed,
+                size: weapon.bulletSize // <-- Store size for collision detection
+            });
+        }
+
+        function createAmmoPickup(x, y) {
+            const size = 15;
+            const geometry = new THREE.BoxGeometry(size, size, size);
+            const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+            const pickupMesh = new THREE.Mesh(geometry, material);
+            pickupMesh.position.set(x, y, size / 2);
+            pickupMesh.rotation.x = Math.random() * Math.PI;
+            pickupMesh.rotation.y = Math.random() * Math.PI;
+            scene.add(pickupMesh);
+            pickups.push({ mesh: pickupMesh, type: 'ammo', size: size }); // Store size for pickup collision
+        }
+
+        // --- Game Logic Functions ---
+        function resetGame() {
+            // Clear existing objects
+            zombies.forEach(z => scene.remove(z.mesh));
+            bullets.forEach(b => scene.remove(b.mesh));
+            pickups.forEach(p => scene.remove(p.mesh));
+            zombies = []; bullets = []; pickups = [];
+
+            if (player) scene.remove(player);
+            player = createPlayer();
+
+            // Set weapon based on selection
+            playerWeapon = WEAPONS[selectedWeaponKey];
+            currentAmmo = playerWeapon.ammo;
+
+            // Reset state
+            playerHealth = playerMaxHealth; playerScore = 0;
+            lastShotTime = 0; lastZombieSpawnTime = Date.now();
+            lastPickupSpawnTime = Date.now() + pickupSpawnRate / 2;
+            lastPlayerHitTime = 0; gameOver = false; gameRunning = true;
+
+            // Update UI
+            highScore = localStorage.getItem('zombieHighScore') || 0;
+            updateUI();
+            gameOverScreen.style.display = 'none';
+            startScreen.style.display = 'none';
+            gameContainer.style.cursor = 'crosshair';
+        }
+
+        function handleInput(deltaTime) {
+             // ... (Movement logic remains the same) ...
+             if (!player || gameOver) return;
+            let moveX = 0, moveY = 0;
+            if (keys['w'] || keys['ArrowUp']) moveY = 1;
+            if (keys['s'] || keys['ArrowDown']) moveY = -1;
+            if (keys['a'] || keys['ArrowLeft']) moveX = -1;
+            if (keys['d'] || keys['ArrowRight']) moveX = 1;
+            const moveVector = new THREE.Vector3(moveX, moveY, 0).normalize();
+            player.position.x += moveVector.x * playerSpeed * deltaTime;
+            player.position.y += moveVector.y * playerSpeed * deltaTime;
+            const halfWidth = gameWidth / 2 - playerSize / 2; // Adjust clamping for size
+            const halfHeight = gameHeight / 2 - playerSize / 2;
+            player.position.x = Math.max(-halfWidth, Math.min(halfWidth, player.position.x));
+            player.position.y = Math.max(-halfHeight, Math.min(halfHeight, player.position.y));
+
+
+            // --- Shooting ---
+            const now = Date.now();
+            if ((keys[' '] || mouse.down) && now - lastShotTime > playerWeapon.fireRate) {
+                if (currentAmmo > 0 || currentAmmo === Infinity) {
+                    const baseDirection = new THREE.Vector3(mouse.x, mouse.y, 0).sub(player.position).normalize();
+                    for (let i = 0; i < playerWeapon.pellets; i++) {
+                        const pelletDirection = baseDirection.clone();
+                        if (playerWeapon.pellets > 1) {
+                            const angleOffset = (Math.random() - 0.5) * playerWeapon.spread;
+                            pelletDirection.applyAxisAngle(new THREE.Vector3(0, 0, 1), angleOffset);
+                        }
+                        createBullet(pelletDirection, playerWeapon);
+                    }
+                    playSound(playerWeapon.sound);
+                    lastShotTime = now;
+                    if (currentAmmo !== Infinity) {
+                        currentAmmo--;
+                        updateUI();
+                    }
+                } else {
+                    if (now - lastShotTime > 500) {
+                        playSound('no_ammo');
+                        lastShotTime = now;
+                    }
+                }
+            }
+        }
+
+        function updateZombies(deltaTime) {
+            // ... (Spawning logic remains the same) ...
+            if (gameOver) return;
+            const now = Date.now();
+            if (now - lastZombieSpawnTime > zombieSpawnRate) {
+                spawnZombie();
+                lastZombieSpawnTime = now;
+            }
+
+
+            // Move existing zombies towards player
+            zombies.forEach(zombie => {
+                // Prevent movement if zombie speed is somehow invalid
+                 if (!zombie.speed || isNaN(zombie.speed)) return;
+
+                const direction = new THREE.Vector3().subVectors(player.position, zombie.mesh.position).normalize();
+                zombie.mesh.position.x += direction.x * zombie.speed * deltaTime;
+                zombie.mesh.position.y += direction.y * zombie.speed * deltaTime;
+                // Optional rotation
+                // zombie.mesh.lookAt(player.position);
+                // zombie.mesh.rotation.x = 0; zombie.mesh.rotation.y = 0;
+            });
+        }
+
+        function spawnZombie() {
+            // ... (Spawning location logic remains the same) ...
+            const edge = Math.floor(Math.random() * 4);
+            let x, y;
+            const buffer = 30;
+            switch (edge) {
+                case 0: x = Math.random() * gameWidth - gameWidth / 2; y = gameHeight / 2 + buffer; break;
+                case 1: x = Math.random() * gameWidth - gameWidth / 2; y = -gameHeight / 2 - buffer; break;
+                case 2: x = -gameWidth / 2 - buffer; y = Math.random() * gameHeight - gameHeight / 2; break;
+                case 3: x = gameWidth / 2 + buffer; y = Math.random() * gameHeight - gameHeight / 2; break;
+            }
+            createZombie(x, y);
+        }
+
+
+        function updateBullets(deltaTime) {
+            // ... (Movement and boundary check remains the same) ...
+             if (gameOver) return;
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                 // Ensure bullet and properties exist before moving
+                 if (!bullet || !bullet.mesh || !bullet.velocity || !bullet.speed) {
+                     if (bullet && bullet.mesh) scene.remove(bullet.mesh); // Clean up if possible
+                     bullets.splice(i, 1);
+                     continue;
+                 }
+                bullet.mesh.position.x += bullet.velocity.x * bullet.speed * deltaTime;
+                bullet.mesh.position.y += bullet.velocity.y * bullet.speed * deltaTime;
+
+                if (Math.abs(bullet.mesh.position.x) > gameWidth / 2 + 50 ||
+                    Math.abs(bullet.mesh.position.y) > gameHeight / 2 + 50) {
+                    scene.remove(bullet.mesh);
+                    bullets.splice(i, 1);
+                }
+            }
+        }
+
+
+        function updatePickups(deltaTime) {
+             // ... (Spawning and rotation logic remains the same) ...
+            if (gameOver) return;
+            const now = Date.now();
+            if (now - lastPickupSpawnTime > pickupSpawnRate) {
+                spawnPickup();
+                lastPickupSpawnTime = now;
+            }
+            pickups.forEach(pickup => {
+                pickup.mesh.rotation.z += 1 * deltaTime;
+            });
+        }
+
+
+        function spawnPickup() {
+            // ... (Spawn location logic remains the same) ...
+            if (pickups.length >= 3) return;
+            const padding = 50;
+            const x = Math.random() * (gameWidth - padding * 2) - (gameWidth / 2 - padding);
+            const y = Math.random() * (gameHeight - padding * 2) - (gameHeight / 2 - padding);
+            createAmmoPickup(x, y);
+        }
+
+
+        // *** COLLISION DETECTION REVISED ***
+        function checkCollisions() {
+            if (gameOver || !player) return; // Ensure player exists
+            const now = Date.now();
+
+            // --- Bullet-Zombie Collisions (Distance Check) ---
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                if (!bullet || !bullet.mesh || !bullet.size) continue; // Safety check
+
+                for (let j = zombies.length - 1; j >= 0; j--) {
+                    const zombie = zombies[j];
+                    if (!zombie || !zombie.mesh || !zombie.size) continue; // Safety check
+
+                    const distanceSq = bullet.mesh.position.distanceToSquared(zombie.mesh.position);
+                    // Calculate combined radius for collision check
+                    const collisionRadius = (bullet.size / 2) + (zombie.size / 2);
+                    const collisionThresholdSq = collisionRadius * collisionRadius;
+
+                    if (distanceSq < collisionThresholdSq) {
+                        playSound('hit_zombie');
+                        zombie.health -= bullet.damage;
+
+                        if (zombie.health <= 0) {
+                            scene.remove(zombie.mesh);
+                            zombies.splice(j, 1);
+                            playerScore++;
+                            updateUI();
+                        }
+
+                        scene.remove(bullet.mesh);
+                        bullets.splice(i, 1);
+                        break; // Bullet hits one zombie
+                    }
+                }
+            }
+
+            // --- Player-Zombie Collisions (Distance Check) ---
+            if (now - lastPlayerHitTime > playerHitCooldown) {
+                for (let j = zombies.length - 1; j >= 0; j--) {
+                    const zombie = zombies[j];
+                    if (!zombie || !zombie.mesh || !zombie.size) continue; // Safety check
+
+                    const distanceSq = player.position.distanceToSquared(zombie.mesh.position);
+                    const collisionRadius = (playerSize / 2) + (zombie.size / 2);
+                    const collisionThresholdSq = collisionRadius * collisionRadius;
+
+                    if (distanceSq < collisionThresholdSq) {
+                        playerHealth -= 15; // Damage amount
+                        playSound('hit_player');
+                        lastPlayerHitTime = now;
+
+                        if (playerHealth <= 0) {
+                            playerHealth = 0;
+                            triggerGameOver();
+                        }
+                        updateUI();
+                        break; // Only one hit per check cycle
+                    }
+                }
+            }
+
+            // --- Player-Pickup Collisions (Distance Check) ---
+            for (let k = pickups.length - 1; k >= 0; k--) {
+                 const pickup = pickups[k];
+                 if (!pickup || !pickup.mesh || !pickup.size) continue; // Safety check
+
+                 const distanceSq = player.position.distanceToSquared(pickup.mesh.position);
+                 const collisionRadius = (playerSize / 2) + (pickup.size / 2); // Use pickup size
+                 const collisionThresholdSq = collisionRadius * collisionRadius;
+
+                 if (distanceSq < collisionThresholdSq) {
+                     if (pickup.type === 'ammo') {
+                         if (playerWeapon.maxAmmo !== Infinity) {
+                             currentAmmo = Math.min(playerWeapon.maxAmmo, currentAmmo + ammoPickupAmount);
+                             playSound('pickup_ammo');
+                             updateUI();
+                         }
+                     }
+                     scene.remove(pickup.mesh);
+                     pickups.splice(k, 1);
+                     // No break needed here, player could potentially pick up multiple items in one frame if overlapping
+                 }
+            }
+        }
+
+        function triggerGameOver() {
+            gameOver = true;
+            gameRunning = false;
+            playSound('game_over');
+            if (playerScore > highScore) {
+                highScore = playerScore;
+                localStorage.setItem('zombieHighScore', highScore);
+            }
+            finalScoreEl.textContent = playerScore;
+            highScoreEl.textContent = highScore;
+            gameOverScreen.style.display = 'flex';
+            highScoreDisplay.style.display = 'block';
+            gameContainer.style.cursor = 'default';
+        }
+
+        function updateUI() {
+            // ... (UI update logic remains the same) ...
+            const healthPercentage = Math.max(0, (playerHealth / playerMaxHealth) * 100);
+            healthBar.style.width = `${healthPercentage}%`;
+            healthText.textContent = `Health: ${Math.max(0, playerHealth)}`;
+            if (healthPercentage > 60) healthBar.style.backgroundColor = '#0f0';
+            else if (healthPercentage > 30) healthBar.style.backgroundColor = '#ff0';
+            else healthBar.style.backgroundColor = '#f00';
+            scoreEl.textContent = `Kills: ${playerScore}`;
+            weaponDisplayEl.textContent = `Weapon: ${playerWeapon.name}`;
+            if (currentAmmo === Infinity) {
+                ammoCountEl.textContent = `Ammo: ∞`;
+            } else {
+                 ammoCountEl.textContent = `Ammo: ${currentAmmo} / ${playerWeapon.maxAmmo}`;
+            }
+        }
+
+
+        // --- Game Loop ---
+        const clock = new THREE.Clock();
+        function animate() {
+             if (!gameRunning && !gameOver) { // Start screen state
+                 requestAnimationFrame(animate);
+                 renderer.render(scene, camera); return;
+             }
+              if (gameOver && !gameRunning) { // Game over state
+                 requestAnimationFrame(animate);
+                 renderer.render(scene, camera); return;
+              }
+
+            requestAnimationFrame(animate);
+            const deltaTime = clock.getDelta();
+            handleInput(deltaTime);
+            updateZombies(deltaTime);
+            updateBullets(deltaTime);
+            updatePickups(deltaTime);
+            checkCollisions(); // Use revised collision check
+            renderer.render(scene, camera);
+        }
+
+        // --- Event Listeners ---
+        window.addEventListener('keydown', (event) => { keys[event.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', (event) => { keys[event.key.toLowerCase()] = false; });
+        function getRelativeMousePos(event) {
+            const rect = gameContainer.getBoundingClientRect();
+            const canvasX = event.clientX - rect.left; const canvasY = event.clientY - rect.top;
+            const worldX = (canvasX / gameWidth) * gameWidth - gameWidth / 2;
+            const worldY = -(canvasY / gameHeight) * gameHeight + gameHeight / 2;
+            return { x: worldX, y: worldY };
+        }
+        gameContainer.addEventListener('mousemove', (event) => { const pos = getRelativeMousePos(event); mouse.x = pos.x; mouse.y = pos.y; });
+        gameContainer.addEventListener('mousedown', (event) => { if (event.button === 0) { mouse.down = true; const pos = getRelativeMousePos(event); mouse.x = pos.x; mouse.y = pos.y;} });
+        gameContainer.addEventListener('mouseup', (event) => { if (event.button === 0) { mouse.down = false; } });
+        gameContainer.addEventListener('contextmenu', (event) => event.preventDefault());
+        weaponSelectionRadios.forEach(radio => { radio.addEventListener('change', (event) => { selectedWeaponKey = event.target.value; }); });
+
+        startButton.addEventListener('click', () => {
+             if (audioContext.state === 'suspended') { audioContext.resume(); }
+            resetGame();
+            animate();
+        });
+
+        restartButton.addEventListener('click', () => {
+             // Restart immediately with the same weapon
+             if (audioContext.state === 'suspended') { audioContext.resume(); }
+             resetGame();
+             // animate() will continue via requestAnimationFrame if resetGame sets gameRunning=true
+        });
+
+        // Listener for the Main Menu button
+        mainMenuButton.addEventListener('click', () => {
+             gameOverScreen.style.display = 'none'; // Hide game over screen
+             startScreen.style.display = 'flex';   // Show start screen
+             gameOver = true;      // Set game state back to initial menu state
+             gameRunning = false;
+             // Clear leftover objects from the finished game for visual tidiness on menu
+             zombies.forEach(z => scene.remove(z.mesh));
+             bullets.forEach(b => scene.remove(b.mesh));
+             pickups.forEach(p => scene.remove(p.mesh));
+             zombies = []; bullets = []; pickups = [];
+             if(player) scene.remove(player);
+             player = null; // Remove player from menu screen
+             renderer.render(scene, camera); // Render the cleaned scene
+        });
+
+
+        // --- Initial Setup ---
+        scene.background = new THREE.Color(0x3d3d3d);
+        highScoreEl.textContent = highScore;
+        highScoreDisplay.style.display = 'block';
+        renderer.render(scene, camera);
+
+    </script>
+</body>
+</html>
